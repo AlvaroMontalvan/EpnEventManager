@@ -1,27 +1,38 @@
-// MANTENIMIENTO CORRECTIVO — Alvaro Montalvan
-// Fix: error tipado como unknown para evitar crash en runtime
-
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { AppLogger } from '../../logger/app-logger.service';
+import { InstrumentEntity } from '../../database/entities/instrument.entity';
+import { EventAction } from './event-action.enum';
+
+interface QueryFilters {
+  action: string;
+  id?: number;
+  tipo?: string;
+}
 
 @Injectable()
 export class EventsService {
-  private eventManagerUrl = process.env.EVENT_MANAGER_URL ?? 'http://localhost:3000/events';
-  constructor(private readonly httpService: HttpService) {}
+  private static readonly SOURCE = 'instruments-crud';
+  private static readonly ENTITY = 'Instrument';
+
+  private readonly eventManagerUrl = process.env.EVENT_MANAGER_URL ?? 'http://localhost:3000/events';
+
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly logger: AppLogger,
+  ) {}
 
   async sendEvent(
-    source: string,
-    entity: string,
-    action: string,
+    action: EventAction,
     title: string,
     description: string,
-    payload: any,
+    payload: unknown,
   ): Promise<void> {
     try {
       const event = {
-        source,
-        entity,
+        source: EventsService.SOURCE,
+        entity: EventsService.ENTITY,
         action,
         title,
         description,
@@ -29,35 +40,46 @@ export class EventsService {
       };
 
       await firstValueFrom(this.httpService.post(this.eventManagerUrl, event));
-      console.log(`${new Date().toISOString()} [INFO] [EventsService] Evento enviado: ${action} en ${entity}`);
+      this.logger.info(`Evento enviado: ${action} en ${EventsService.ENTITY}`, 'EventsService');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Error desconocido';
-      console.error(`${new Date().toISOString()} [ERROR] [EventsService] Error al enviar evento: ${message}`);
+      this.logger.error(`Error al enviar evento: ${message}`, undefined, 'EventsService');
     }
   }
 
-  async onCreateInstrument(instrument: any): Promise<void> {
-    await this.sendEvent('instruments-crud', 'Instrument', 'CREATE',
+  async onCreateInstrument(instrument: InstrumentEntity): Promise<void> {
+    await this.sendEvent(
+      EventAction.CREATE,
       `Instrumento creado: ${instrument.nombre}`,
-      `Se creó un nuevo instrumento de tipo ${instrument.tipo}`, instrument);
+      `Se creó un nuevo instrumento de tipo ${instrument.tipo}`,
+      instrument,
+    );
   }
 
-  async onUpdateInstrument(oldInstrument: any, newInstrument: any): Promise<void> {
-    await this.sendEvent('instruments-crud', 'Instrument', 'UPDATE',
+  async onUpdateInstrument(oldInstrument: InstrumentEntity, newInstrument: InstrumentEntity): Promise<void> {
+    await this.sendEvent(
+      EventAction.UPDATE,
       `Instrumento actualizado: ${newInstrument.nombre}`,
       `Se actualizó el instrumento con ID ${newInstrument.id}`,
-      { before: oldInstrument, after: newInstrument });
+      { before: oldInstrument, after: newInstrument },
+    );
   }
 
-  async onDeleteInstrument(instrument: any): Promise<void> {
-    await this.sendEvent('instruments-crud', 'Instrument', 'DELETE',
+  async onDeleteInstrument(instrument: InstrumentEntity): Promise<void> {
+    await this.sendEvent(
+      EventAction.DELETE,
       `Instrumento eliminado: ${instrument.nombre}`,
-      `Se eliminó el instrumento con ID ${instrument.id}`, instrument);
+      `Se eliminó el instrumento con ID ${instrument.id}`,
+      instrument,
+    );
   }
 
-  async onQueryInstruments(count: number, filters: any): Promise<void> {
-    await this.sendEvent('instruments-crud', 'Instrument', 'QUERY',
+  async onQueryInstruments(count: number, filters: QueryFilters): Promise<void> {
+    await this.sendEvent(
+      EventAction.QUERY,
       'Consulta de instrumentos realizada',
-      `Se consultaron ${count} instrumento(s)`, filters);
+      `Se consultaron ${count} instrumento(s)`,
+      filters,
+    );
   }
 }

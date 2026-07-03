@@ -2,167 +2,100 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateEventDto } from './dto/create-event.dto';
-import { CreateEventEntity } from '../../database/entities/create-event.entity';
-import { UpdateEventEntity } from '../../database/entities/update-event.entity';
-import { DeleteEventEntity } from '../../database/entities/delete-event.entity';
-import { QueryEventEntity } from '../../database/entities/query-event.entity';
+import { EventLogEntity } from '../../database/entities/event-log.entity';
+import { EventsMapper } from './events.mapper';
+import { EventAction, EVENT_ACTIONS } from './event-action.enum';
+import { AppLogger } from '../../logger/app-logger.service';
+import {
+  EventLogResponse,
+  EventStats,
+  RegisterEventResult,
+} from './dto/event-log.response';
+
+const DEFAULT_RECENT_LIMIT = 10;
 
 @Injectable()
 export class EventsService {
   constructor(
-    @InjectRepository(CreateEventEntity)
-    private readonly createRepo: Repository<CreateEventEntity>,
-    @InjectRepository(UpdateEventEntity)
-    private readonly updateRepo: Repository<UpdateEventEntity>,
-    @InjectRepository(DeleteEventEntity)
-    private readonly deleteRepo: Repository<DeleteEventEntity>,
-    @InjectRepository(QueryEventEntity)
-    private readonly queryRepo: Repository<QueryEventEntity>,
+    @InjectRepository(EventLogEntity)
+    private readonly eventLogRepository: Repository<EventLogEntity>,
+    private readonly logger: AppLogger,
   ) {}
 
-  async registerEvent(dto: CreateEventDto): Promise<{ ok: boolean; error?: string }> {
+  async registerEvent(dto: CreateEventDto): Promise<RegisterEventResult> {
+    const recordedAt = new Date().toISOString();
+    const eventLog = EventsMapper.toEventLogData(dto, recordedAt);
+
     try {
-      const action = (dto.action ?? '').toUpperCase();
-      const payloadStr = JSON.stringify(dto.payload ?? {});
-      const isoDate = new Date().toISOString();
-
-      if (action === 'CREATE') {
-        const ev = this.createRepo.create({
-          source: dto.source,
-          entity: dto.entity,
-          action: dto.action,
-          title: dto.title,
-          description: dto.description,
-          payload: payloadStr,
-          recorded_at: isoDate,
-        });
-        await this.createRepo.save(ev);
-        return { ok: true };
-      }
-
-      if (action === 'UPDATE') {
-        const ev = this.updateRepo.create({
-          source: dto.source,
-          entity: dto.entity,
-          action: dto.action,
-          title: dto.title,
-          description: dto.description,
-          payload: payloadStr,
-          timestamp: isoDate,
-        });
-        await this.updateRepo.save(ev);
-        return { ok: true };
-      }
-
-      if (action === 'DELETE') {
-        const ev = this.deleteRepo.create({
-          source: dto.source,
-          entity: dto.entity,
-          action: dto.action,
-          title: dto.title,
-          payload: payloadStr,
-          createdAt: isoDate,
-        });
-        await this.deleteRepo.save(ev);
-        return { ok: true };
-      }
-
-      if (action === 'QUERY') {
-        const ev = this.queryRepo.create({
-          source: dto.source,
-          entity: dto.entity,
-          action: dto.action,
-          title: dto.title,
-          description: dto.description,
-          payload: payloadStr,
-          event_date: isoDate,
-        });
-        await this.queryRepo.save(ev);
-        return { ok: true };
-      }
-
-      return { ok: false };
-
+      await this.eventLogRepository.save(
+        this.eventLogRepository.create(eventLog),
+      );
+      this.logger.info(
+        `Evento registrado: ${dto.action} sobre ${dto.entity}`,
+        'EventsService',
+      );
+      return { ok: true };
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Error desconocido';
-      console.error('❌ Error al registrar evento:', message);
+      const message =
+        error instanceof Error ? error.message : 'Error desconocido';
+      this.logger.error(
+        `No se pudo registrar el evento: ${message}`,
+        undefined,
+        'EventsService',
+      );
       return { ok: false, error: 'Error interno al persistir el evento' };
     }
   }
 
-  async findAll(): Promise<object[]> {
-    const creates = await this.createRepo.find();
-    const updates = await this.updateRepo.find();
-    const deletes = await this.deleteRepo.find();
-    const queries = await this.queryRepo.find();
-
-    const merged = [
-      ...creates.map((e) => ({ ...e, _table: 'create_events' })),
-      ...updates.map((e) => ({ ...e, _table: 'update_events' })),
-      ...deletes.map((e) => ({ ...e, _table: 'delete_events' })),
-      ...queries.map((e) => ({ ...e, _table: 'query_events' })),
-    ];
-
-    merged.sort((a, b) => {
-      const ra = a as unknown as Record<string, string>;
-      const rb = b as unknown as Record<string, string>;
-      const ta = ra.recorded_at ?? ra.timestamp ?? ra.createdAt ?? ra.event_date ?? '';
-      const tb = rb.recorded_at ?? rb.timestamp ?? rb.createdAt ?? rb.event_date ?? '';
-      return ta.localeCompare(tb);
-    });
-
-    return merged;
+  async findAll(): Promise<EventLogResponse[]> {
+    return this.eventLogRepository.find({ order: { recordedAt: 'ASC' } });
   }
 
-  async findBySource(source: string): Promise<object[]> {
-    const creates = await this.createRepo.findBy({ source });
-    const updates = await this.updateRepo.findBy({ source });
-    const deletes = await this.deleteRepo.findBy({ source });
-    const queries = await this.queryRepo.findBy({ source });
-    return [...creates, ...updates, ...deletes, ...queries];
+  async findBySource(source: string): Promise<EventLogResponse[]> {
+    return this.eventLogRepository.findBy({ source });
   }
 
-  async findByEntity(entity: string): Promise<object[]> {
-    const creates = await this.createRepo.findBy({ entity });
-    const updates = await this.updateRepo.findBy({ entity });
-    const deletes = await this.deleteRepo.findBy({ entity });
-    const queries = await this.queryRepo.findBy({ entity });
-    return [...creates, ...updates, ...deletes, ...queries];
+  async findByEntity(entity: string): Promise<EventLogResponse[]> {
+    return this.eventLogRepository.findBy({ entity });
   }
 
-  async getStats(): Promise<object> {
-    const createCount = await this.createRepo.count();
-    const updateCount = await this.updateRepo.count();
-    const deleteCount = await this.deleteRepo.count();
-    const queryCount = await this.queryRepo.count();
-    const total = createCount + updateCount + deleteCount + queryCount;
+  async getStats(): Promise<EventStats> {
+    const events = await this.eventLogRepository.find();
 
-    const allCreates = await this.createRepo.find();
-    const allUpdates = await this.updateRepo.find();
-    const allDeletes = await this.deleteRepo.find();
-    const allQueries = await this.queryRepo.find();
-
-    const bySource: Record<string, number> = {};
-    [...allCreates, ...allUpdates, ...allDeletes, ...allQueries].forEach((ev: any) => {
-      const src = ev.source || 'unknown';
-      bySource[src] = (bySource[src] || 0) + 1;
-    });
+    const byAction = this.countByField(events, 'action') as Record<
+      EventAction,
+      number
+    >;
+    for (const action of EVENT_ACTIONS) {
+      byAction[action] = byAction[action] ?? 0;
+    }
 
     return {
-      byAction: {
-        create: createCount,
-        update: updateCount,
-        delete: deleteCount,
-        query: queryCount,
-      },
-      total,
-      bySource,
+      byAction,
+      total: events.length,
+      bySource: this.countByField(events, 'source'),
       generatedAt: new Date().toISOString(),
     };
   }
 
-  async getRecentEvents(limit: number): Promise<object[]> {
-    const all = await this.findAll();
-    return all.slice(0, limit > 0 ? limit : 10);
+  async getRecentEvents(
+    limit: number = DEFAULT_RECENT_LIMIT,
+  ): Promise<EventLogResponse[]> {
+    const safeLimit = limit > 0 ? limit : DEFAULT_RECENT_LIMIT;
+    return this.eventLogRepository.find({
+      order: { recordedAt: 'DESC' },
+      take: safeLimit,
+    });
+  }
+
+  private countByField(
+    events: EventLogEntity[],
+    field: 'action' | 'source',
+  ): Record<string, number> {
+    return events.reduce<Record<string, number>>((counts, event) => {
+      const key = event[field];
+      counts[key] = (counts[key] ?? 0) + 1;
+      return counts;
+    }, {});
   }
 }

@@ -9,6 +9,7 @@ import { CreateInstrumentDto } from './dto/create-instrument.dto';
 import { UpdateInstrumentDto } from './dto/update-instrument.dto';
 import { EventsService } from '../events/events.service';
 import { AppLogger } from '../../logger/app-logger.service';
+import { InventorySummary } from './dto/inventory-summary';
 
 @Injectable()
 export class InstrumentsService {
@@ -171,12 +172,12 @@ export class InstrumentsService {
     }
   }
 
-  async getInventorySummary(): Promise<any> {
+  async getInventorySummary(): Promise<InventorySummary> {
     try {
       this.logger.info('[QUERY] Generando resumen de inventario', 'InstrumentsService');
       const instruments = await this.instrumentRepository.find();
 
-      const summary = {
+      const summary: InventorySummary = {
         totalInstruments: instruments.length,
         totalValue: instruments.reduce((sum, inst) => sum + Number(inst.precio) * inst.cantidad, 0),
         instrumentsByType: {} as Record<string, number>,

@@ -14,7 +14,8 @@ export class HealthController {
         memory: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
       };
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Error desconocido';
+      const message =
+        error instanceof Error ? error.message : 'Error desconocido';
       return {
         status: 'error',
         timestamp: new Date().toISOString(),

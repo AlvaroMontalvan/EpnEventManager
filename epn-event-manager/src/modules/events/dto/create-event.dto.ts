@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, MaxLength, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  MaxLength,
+  IsIn,
+} from 'class-validator';
+import { EVENT_ACTIONS } from '../event-action.enum';
 
 export class CreateEventDto {
   @IsString()
@@ -13,8 +20,8 @@ export class CreateEventDto {
 
   @IsString()
   @IsNotEmpty({ message: 'El campo action no puede estar vacío' })
-  @IsIn(['CREATE', 'UPDATE', 'DELETE', 'QUERY'], {
-    message: 'action debe ser CREATE, UPDATE, DELETE o QUERY',
+  @IsIn(EVENT_ACTIONS, {
+    message: `action debe ser una de: ${EVENT_ACTIONS.join(', ')}`,
   })
   action!: string;
 
@@ -29,5 +36,5 @@ export class CreateEventDto {
   description?: string;
 
   @IsOptional()
-  payload?: any;
+  payload?: unknown;
 }

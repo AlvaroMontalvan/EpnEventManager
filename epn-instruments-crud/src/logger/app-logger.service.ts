@@ -11,6 +11,10 @@ export class AppLogger implements LoggerService {
     return `${timestamp} [${level}] ${ctx} ${message}`;
   }
 
+  debug(message: string, context?: string) {
+    console.debug(this.formatMessage('DEBUG', message, context));
+  }
+
   log(message: string, context?: string) {
     console.log(this.formatMessage('INFO', message, context));
   }
