@@ -6,9 +6,24 @@ software (Gestión ágil + Clean Code + CI/CD).
 
 ## 1. Gestión del Backlog
 
-El trabajo de ambos repositorios se gestiona en un único **GitHub Project (Kanban)**
-compartido por el equipo, con las columnas: `Backlog` → `Ready` → `In Progress` →
-`In Review` → `Done`.
+El trabajo de ambos repositorios se gestiona en un único **tablero Kanban** (GitHub
+Project) compartido por el equipo, con las columnas: `Backlog` → `Ready` →
+`In Progress` → `In Review` → `Done`.
+
+Cada Issue lleva además un label `status:*` que refleja su columna actual en el
+tablero, de modo que el estado del Kanban sea consultable directamente desde la
+lista de Issues aunque no se tenga abierto el board:
+
+| Columna       | Label              |
+|---------------|--------------------|
+| Backlog       | `status:backlog`   |
+| Ready         | `status:ready`     |
+| In Progress   | `status:in-progress` |
+| In Review     | `status:in-review` |
+| Done          | `status:done`      |
+
+Al mover una tarjeta de columna en el board, se actualiza el label `status:*`
+correspondiente del Issue (y viceversa).
 
 ### Tipos de ticket (GitHub Issues)
 
@@ -44,6 +59,13 @@ Un ticket se cierra solo si:
 - `develop`: integración de features antes de release.
 - `feature/<ticket-id>-<descripcion-corta>`: una rama por ticket.
 - **Prohibido el push directo a `main` o `develop`.** Todo cambio entra por Pull Request.
+
+> **Configuración pendiente (requiere un administrador del repositorio):** activar
+> las reglas de protección de rama en GitHub (`Settings → Branches → Add rule`)
+> para `main` y `develop`: exigir Pull Request antes de mergear, exigir que los
+> checks de CI (`ci-event-manager`, `ci-instruments-crud`) pasen, exigir al menos
+> 1 aprobación de revisión, y bloquear el push directo. Esto convierte en
+> obligatorias (y no solo convencionales) las reglas de este documento.
 
 ## 3. Pull Requests
 
