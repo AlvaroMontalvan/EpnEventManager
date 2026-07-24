@@ -112,9 +112,7 @@ describe('EventsService', () => {
         to: '2026-01-31T23:59:59.999Z',
       });
 
-      const [callArgs] = (repository.find as jest.Mock).mock.calls[0] as [
-        { where: { action?: EventAction; recordedAt?: unknown } },
-      ];
+      const callArgs = (repository.find as jest.Mock).mock.calls[0][0];
       expect(callArgs.where.action).toBe(EventAction.QUERY);
       expect(callArgs.where.recordedAt).toBeDefined();
     });
@@ -124,9 +122,7 @@ describe('EventsService', () => {
 
       await service.findAll({ from: '2026-01-01T00:00:00.000Z' });
 
-      const [callArgs] = (repository.find as jest.Mock).mock.calls[0] as [
-        { where: { recordedAt?: unknown } },
-      ];
+      const callArgs = (repository.find as jest.Mock).mock.calls[0][0];
       expect(callArgs.where.recordedAt).toBeDefined();
     });
 
@@ -135,9 +131,7 @@ describe('EventsService', () => {
 
       await service.findAll({ to: '2026-01-31T23:59:59.999Z' });
 
-      const [callArgs] = (repository.find as jest.Mock).mock.calls[0] as [
-        { where: { recordedAt?: unknown } },
-      ];
+      const callArgs = (repository.find as jest.Mock).mock.calls[0][0];
       expect(callArgs.where.recordedAt).toBeDefined();
     });
   });
