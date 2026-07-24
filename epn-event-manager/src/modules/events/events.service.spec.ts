@@ -7,6 +7,8 @@ import { AppLogger } from '../../logger/app-logger.service';
 import { EventAction } from './event-action.enum';
 import { CreateEventDto } from './dto/create-event.dto';
 
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 type MockRepository = Partial<
   Record<keyof Repository<EventLogEntity>, jest.Mock>
 >;
@@ -97,7 +99,9 @@ describe('EventsService', () => {
 
       await service.findAll({ action: EventAction.CREATE });
 
-      expect(repository.find).toHaveBeenCalledWith({
+      const callArgs = (repository.find as jest.Mock).mock
+        .calls[0][0] as Record<string, unknown>;
+      expect(callArgs).toEqual({
         where: { action: EventAction.CREATE },
         order: { recordedAt: 'ASC' },
       });
@@ -112,9 +116,11 @@ describe('EventsService', () => {
         to: '2026-01-31T23:59:59.999Z',
       });
 
-      const callArgs = (repository.find as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where.action).toBe(EventAction.QUERY);
-      expect(callArgs.where.recordedAt).toBeDefined();
+      const callArgs = (repository.find as jest.Mock).mock
+        .calls[0][0] as Record<string, unknown>;
+      const where = callArgs.where as Record<string, unknown>;
+      expect(where.action).toBe(EventAction.QUERY);
+      expect(where.recordedAt).toBeDefined();
     });
 
     it('filters by from only', async () => {
@@ -122,8 +128,10 @@ describe('EventsService', () => {
 
       await service.findAll({ from: '2026-01-01T00:00:00.000Z' });
 
-      const callArgs = (repository.find as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where.recordedAt).toBeDefined();
+      const callArgs = (repository.find as jest.Mock).mock
+        .calls[0][0] as Record<string, unknown>;
+      const where = callArgs.where as Record<string, unknown>;
+      expect(where.recordedAt).toBeDefined();
     });
 
     it('filters by to only', async () => {
@@ -131,8 +139,10 @@ describe('EventsService', () => {
 
       await service.findAll({ to: '2026-01-31T23:59:59.999Z' });
 
-      const callArgs = (repository.find as jest.Mock).mock.calls[0][0];
-      expect(callArgs.where.recordedAt).toBeDefined();
+      const callArgs = (repository.find as jest.Mock).mock
+        .calls[0][0] as Record<string, unknown>;
+      const where = callArgs.where as Record<string, unknown>;
+      expect(where.recordedAt).toBeDefined();
     });
   });
 
