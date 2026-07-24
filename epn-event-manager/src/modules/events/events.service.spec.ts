@@ -80,8 +80,8 @@ describe('EventsService', () => {
   });
 
   describe('findAll', () => {
-    it('returns events ordered by recordedAt ascending', async () => {
-      const events = [{ id: 1 }];
+    it('returns events ordered by recordedAt ascending when no filters are given', async () => {
+      const events = [{ id: 1, payload: '{"foo":"bar"}' }];
       (repository.find as jest.Mock).mockResolvedValue(events);
 
       const result = await service.findAll();
@@ -89,7 +89,56 @@ describe('EventsService', () => {
       expect(repository.find).toHaveBeenCalledWith({
         order: { recordedAt: 'ASC' },
       });
-      expect(result).toBe(events);
+      expect(result).toEqual([{ id: 1, payload: { foo: 'bar' } }]);
+    });
+
+    it('filters by action only', async () => {
+      (repository.find as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll({ action: EventAction.CREATE });
+
+      expect(repository.find).toHaveBeenCalledWith({
+        where: { action: EventAction.CREATE },
+        order: { recordedAt: 'ASC' },
+      });
+    });
+
+    it('filters by from and to combined with action (AND, not OR)', async () => {
+      (repository.find as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll({
+        action: EventAction.QUERY,
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-01-31T23:59:59.999Z',
+      });
+
+      const [callArgs] = (repository.find as jest.Mock).mock.calls[0] as [
+        { where: { action?: EventAction; recordedAt?: unknown } },
+      ];
+      expect(callArgs.where.action).toBe(EventAction.QUERY);
+      expect(callArgs.where.recordedAt).toBeDefined();
+    });
+
+    it('filters by from only', async () => {
+      (repository.find as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll({ from: '2026-01-01T00:00:00.000Z' });
+
+      const [callArgs] = (repository.find as jest.Mock).mock.calls[0] as [
+        { where: { recordedAt?: unknown } },
+      ];
+      expect(callArgs.where.recordedAt).toBeDefined();
+    });
+
+    it('filters by to only', async () => {
+      (repository.find as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll({ to: '2026-01-31T23:59:59.999Z' });
+
+      const [callArgs] = (repository.find as jest.Mock).mock.calls[0] as [
+        { where: { recordedAt?: unknown } },
+      ];
+      expect(callArgs.where.recordedAt).toBeDefined();
     });
   });
 
@@ -106,6 +155,34 @@ describe('EventsService', () => {
       (repository.findBy as jest.Mock).mockResolvedValue([]);
       await service.findByEntity('Instrument');
       expect(repository.findBy).toHaveBeenCalledWith({ entity: 'Instrument' });
+    });
+
+    it('returns payload already parsed as an object', async () => {
+      (repository.findBy as jest.Mock).mockResolvedValue([
+        { id: 1, payload: '{"quantity":5}' },
+      ]);
+
+      const result = await service.findBySource('instruments-crud');
+
+      expect(result[0].payload).toEqual({ quantity: 5 });
+      expect(typeof result[0].payload).not.toBe('string');
+    });
+  });
+
+  describe('payload parsing', () => {
+    it('returns null and logs a warning when the stored payload is not valid JSON', async () => {
+      const loggerWarn = jest.spyOn(
+        (service as unknown as { logger: { warn: jest.Mock } }).logger,
+        'warn',
+      );
+      (repository.find as jest.Mock).mockResolvedValue([
+        { id: 1, payload: 'esto no es json' },
+      ]);
+
+      const result = await service.findAll();
+
+      expect(result[0].payload).toBeNull();
+      expect(loggerWarn).toHaveBeenCalled();
     });
   });
 
