@@ -1,41 +1,8 @@
-import { IsString, IsNumber, IsOptional, Min } from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
+import { CreateInstrumentDto } from './create-instrument.dto';
 
-export class UpdateInstrumentDto {
-  @IsOptional()
-  @IsString()
-  nombre?: string;
-
-  @IsOptional()
-  @IsString()
-  tipo?: string;
-
-  @IsOptional()
-  @IsString()
-  marca?: string;
-
-  @IsOptional()
-  @IsString()
-  modelo?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  precio?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  cantidad?: number;
-
-  @IsOptional()
-  @IsString()
-  descripcion?: string;
-
-  @IsOptional()
-  @IsString()
-  condicion?: string;
-
-  @IsOptional()
-  @IsString()
-  ubicacion?: string;
-}
+// Hereda todos los campos, validaciones (@IsIn, @MaxLength, @Min, @Max) y
+// metadatos de Swagger de CreateInstrumentDto, marcándolos como opcionales.
+// Evita la duplicación manual que causó el bug de A2 (tipo/condicion sin
+// validar en el update).
+export class UpdateInstrumentDto extends PartialType(CreateInstrumentDto) {}
