@@ -11,6 +11,8 @@ import { EventsService } from '../events/events.service';
 import { AppLogger } from '../../logger/app-logger.service';
 import { InventorySummary } from './dto/inventory-summary';
 
+const DEFAULT_LOW_STOCK_THRESHOLD = 3;
+
 @Injectable()
 export class InstrumentsService {
   constructor(
@@ -24,14 +26,11 @@ export class InstrumentsService {
     try {
       this.logger.info(`[CREATE] Iniciando creación: ${createInstrumentDto.nombre}`, 'InstrumentsService');
 
-      if (createInstrumentDto.cantidad < 0) {
-        this.logger.warn(`[CREATE] Cantidad negativa rechazada: ${createInstrumentDto.cantidad}`, 'InstrumentsService');
-        throw new BadRequestException('La cantidad no puede ser negativa');
-      }
-      if (createInstrumentDto.precio < 0) {
-        this.logger.warn(`[CREATE] Precio negativo rechazado: ${createInstrumentDto.precio}`, 'InstrumentsService');
-        throw new BadRequestException('El precio no puede ser negativo');
-      }
+      // La validación de cantidad/precio negativos vive únicamente en
+      // CreateInstrumentDto (@Min(0)) + el ValidationPipe global de
+      // AppModule (whitelist + forbidNonWhitelisted + transform), que
+      // rechaza la petición antes de llegar aquí. Ver update-instrument.dto
+      // y create-instrument.dto.spec.ts para la cobertura de ese caso.
 
       const instrument = this.instrumentRepository.create(createInstrumentDto);
       const savedInstrument = await this.instrumentRepository.save(instrument);
@@ -41,7 +40,8 @@ export class InstrumentsService {
       return savedInstrument;
 
     } catch (error: unknown) {
-      if (error instanceof BadRequestException) throw error;
+      // BadRequestException ya no se origina dentro de este try (ver nota
+      // arriba), por lo que ya no hace falta reenviarla sin envolver aquí.
       const msg = error instanceof Error ? error.message : 'Error desconocido';
       this.logger.error(`[CREATE] Error inesperado: ${msg}`, '', 'InstrumentsService');
       throw new InternalServerErrorException('Error al crear el instrumento');
@@ -103,14 +103,9 @@ export class InstrumentsService {
       this.logger.info(`[UPDATE] Actualizando ID=${id}`, 'InstrumentsService');
       const existingInstrument = await this.findOne(id);
 
-      if (updateInstrumentDto.cantidad !== undefined && updateInstrumentDto.cantidad < 0) {
-        this.logger.warn(`[UPDATE] Cantidad negativa rechazada en ID=${id}`, 'InstrumentsService');
-        throw new BadRequestException('La cantidad no puede ser negativa');
-      }
-      if (updateInstrumentDto.precio !== undefined && updateInstrumentDto.precio < 0) {
-        this.logger.warn(`[UPDATE] Precio negativo rechazado en ID=${id}`, 'InstrumentsService');
-        throw new BadRequestException('El precio no puede ser negativo');
-      }
+      // Igual que en create(): cantidad/precio negativos ya son rechazados
+      // por UpdateInstrumentDto (@Min(0), heredado vía PartialType) y el
+      // ValidationPipe global antes de llegar al service.
 
       const before = { ...existingInstrument };
       Object.assign(existingInstrument, updateInstrumentDto);
@@ -121,7 +116,9 @@ export class InstrumentsService {
       return updatedInstrument;
 
     } catch (error: unknown) {
-      if (error instanceof BadRequestException || error instanceof NotFoundException) throw error;
+      // BadRequestException ya no se origina dentro de este try; solo
+      // NotFoundException (de findOne) debe reenviarse sin envolver.
+      if (error instanceof NotFoundException) throw error;
       const msg = error instanceof Error ? error.message : 'Error desconocido';
       this.logger.error(`[UPDATE] Error en update(${id}): ${msg}`, '', 'InstrumentsService');
       throw new InternalServerErrorException('Error al actualizar el instrumento');
@@ -172,9 +169,16 @@ export class InstrumentsService {
     }
   }
 
-  async getInventorySummary(): Promise<InventorySummary> {
+  async getInventorySummary(
+    lowStockThreshold: number = DEFAULT_LOW_STOCK_THRESHOLD,
+  ): Promise<InventorySummary> {
     try {
-      this.logger.info('[QUERY] Generando resumen de inventario', 'InstrumentsService');
+      const threshold =
+        lowStockThreshold > 0 ? lowStockThreshold : DEFAULT_LOW_STOCK_THRESHOLD;
+      this.logger.info(
+        `[QUERY] Generando resumen de inventario (umbral bajo stock=${threshold})`,
+        'InstrumentsService',
+      );
       const instruments = await this.instrumentRepository.find();
 
       const summary: InventorySummary = {
@@ -186,7 +190,7 @@ export class InstrumentsService {
 
       for (const instrument of instruments) {
         summary.instrumentsByType[instrument.tipo] = (summary.instrumentsByType[instrument.tipo] || 0) + 1;
-        if (instrument.cantidad < 3) summary.lowStockItems.push(instrument);
+        if (instrument.cantidad < threshold) summary.lowStockItems.push(instrument);
       }
 
       this.logger.info(`[QUERY] Resumen: ${instruments.length} instrumentos, valor $${summary.totalValue}`, 'InstrumentsService');
