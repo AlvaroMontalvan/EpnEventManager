@@ -120,10 +120,11 @@ export class EventsService {
     limit: number = DEFAULT_RECENT_LIMIT,
   ): Promise<EventLogResponse[]> {
     const safeLimit = limit > 0 ? limit : DEFAULT_RECENT_LIMIT;
-    return this.eventLogRepository.find({
+    const events = await this.eventLogRepository.find({
       order: { recordedAt: 'DESC' },
       take: safeLimit,
     });
+    return events.map((event) => this.toResponse(event));
   }
 
   private countByField(
