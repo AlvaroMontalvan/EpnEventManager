@@ -69,17 +69,9 @@ describe('InstrumentsService — Pruebas Unitarias', () => {
       expect(mockEventsService.onCreateInstrument).toHaveBeenCalledWith(savedInstrument);
     });
 
-    it('debe lanzar BadRequestException si cantidad es negativa', async () => {
-      const dto = { nombre: 'Guitarra', tipo: 'Cuerda', precio: 100, cantidad: -1 };
-      await expect(service.create(dto as any)).rejects.toThrow(BadRequestException);
-      expect(mockRepository.save).not.toHaveBeenCalled();
-    });
-
-    it('debe lanzar BadRequestException si precio es negativo', async () => {
-      const dto = { nombre: 'Flauta', tipo: 'Viento', precio: -50, cantidad: 2 };
-      await expect(service.create(dto as any)).rejects.toThrow(BadRequestException);
-      expect(mockRepository.save).not.toHaveBeenCalled();
-    });
+    // Nota (ticket B3): la validación de cantidad/precio negativos en create()
+    // se eliminó del service porque ya la cubren CreateInstrumentDto (@Min(0))
+    // + el ValidationPipe global — ver create-instrument.dto.spec.ts.
 
     it('debe aceptar precio igual a cero', async () => {
       const dto = { nombre: 'Tambor', tipo: 'Percusión', precio: 0, cantidad: 1 };
@@ -151,19 +143,9 @@ describe('InstrumentsService — Pruebas Unitarias', () => {
       expect(mockEventsService.onUpdateInstrument).toHaveBeenCalled();
     });
 
-    it('debe lanzar BadRequestException si cantidad de actualización es negativa', async () => {
-      const existing = { id: 1, nombre: 'Guitarra', tipo: 'Cuerda', precio: 100, cantidad: 3 };
-      mockRepository.findOne.mockResolvedValue(existing);
-
-      await expect(service.update(1, { cantidad: -5 } as any)).rejects.toThrow(BadRequestException);
-    });
-
-    it('debe lanzar BadRequestException si precio de actualización es negativo', async () => {
-      const existing = { id: 1, nombre: 'Guitarra', tipo: 'Cuerda', precio: 100, cantidad: 3 };
-      mockRepository.findOne.mockResolvedValue(existing);
-
-      await expect(service.update(1, { precio: -50 } as any)).rejects.toThrow(BadRequestException);
-    });
+    // Nota (ticket B3): igual que en create(), esta validación ahora vive
+    // solo en UpdateInstrumentDto + el ValidationPipe global — ver
+    // update-instrument.dto.spec.ts.
   });
 
   // ─── DELETE ────────────────────────────────────────────────────────────────
@@ -226,6 +208,28 @@ describe('InstrumentsService — Pruebas Unitarias', () => {
       expect(mockEventsService.onQueryInstruments).toHaveBeenCalledWith(3, {
         action: 'getInventorySummary',
       });
+    });
+
+    it('debe respetar un umbral de bajo stock personalizado', async () => {
+      const instruments = [
+        { id: 1, tipo: 'Cuerda', precio: 100, cantidad: 4 },
+        { id: 2, tipo: 'Cuerda', precio: 50, cantidad: 6 },
+      ];
+      mockRepository.find.mockResolvedValue(instruments);
+
+      const summary = await service.getInventorySummary(5);
+
+      expect(summary.lowStockItems).toHaveLength(1);
+      expect(summary.lowStockItems[0].id).toBe(1);
+    });
+
+    it('debe usar el umbral por defecto si se envía un valor no positivo', async () => {
+      const instruments = [{ id: 1, tipo: 'Cuerda', precio: 100, cantidad: 2 }];
+      mockRepository.find.mockResolvedValue(instruments);
+
+      const summary = await service.getInventorySummary(0);
+
+      expect(summary.lowStockItems).toHaveLength(1);
     });
   });
 
@@ -301,6 +305,55 @@ describe('InstrumentsService — Pruebas Unitarias', () => {
     it('maneja un valor no-Error lanzado por el repositorio', async () => {
       mockRepository.find.mockRejectedValue('fallo desconocido de bajo nivel');
       await expect(service.findAll()).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('create() maneja un valor no-Error lanzado por el repositorio', async () => {
+      const dto = { nombre: 'Guitarra', tipo: 'Cuerda', precio: 150, cantidad: 5 };
+      mockRepository.create.mockReturnValue(dto);
+      mockRepository.save.mockRejectedValue('fallo desconocido de bajo nivel');
+
+      await expect(service.create(dto as any)).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('update() maneja un valor no-Error lanzado por el repositorio', async () => {
+      const existing = { id: 1, nombre: 'Guitarra', tipo: 'Cuerda', precio: 100, cantidad: 3 };
+      mockRepository.findOne.mockResolvedValue(existing);
+      mockRepository.save.mockRejectedValue('fallo desconocido de bajo nivel');
+
+      await expect(service.update(1, { precio: 200 } as any)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+
+    it('findByTipo() maneja un valor no-Error lanzado por el repositorio', async () => {
+      mockRepository.find.mockRejectedValue('fallo desconocido de bajo nivel');
+      await expect(service.findByTipo('Cuerda')).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('remove() maneja un valor no-Error lanzado por el repositorio', async () => {
+      const instrument = { id: 1, nombre: 'Trompeta', tipo: 'Viento' };
+      mockRepository.findOne.mockResolvedValue(instrument);
+      mockRepository.remove.mockRejectedValue('fallo desconocido de bajo nivel');
+
+      await expect(service.remove(1)).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('updateQuantity() maneja un valor no-Error lanzado por el repositorio', async () => {
+      const instrument = { id: 1, nombre: 'Bajo', tipo: 'Cuerda', cantidad: 5 };
+      mockRepository.findOne.mockResolvedValue(instrument);
+      mockRepository.save.mockRejectedValue('fallo desconocido de bajo nivel');
+
+      await expect(service.updateQuantity(1, 1)).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('getInventorySummary() maneja un valor no-Error lanzado por el repositorio', async () => {
+      mockRepository.find.mockRejectedValue('fallo desconocido de bajo nivel');
+      await expect(service.getInventorySummary()).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('findOne() maneja un valor no-Error lanzado por el repositorio', async () => {
+      mockRepository.findOne.mockRejectedValue('fallo desconocido de bajo nivel');
+      await expect(service.findOne(1)).rejects.toThrow(InternalServerErrorException);
     });
   });
 });
