@@ -7,7 +7,7 @@ export interface EventLogResponse {
   action: EventAction;
   title: string;
   description: string;
-  payload: string;
+  payload: unknown;
   recordedAt: string;
 }
 
