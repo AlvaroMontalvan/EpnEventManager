@@ -3,7 +3,7 @@
 
 import {
   Controller, Get, Post, Body, Param, Put, Delete,
-  HttpCode, HttpStatus, ParseIntPipe, Query,
+  HttpCode, HttpStatus, ParseIntPipe, Query, DefaultValuePipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiSecurity } from '@nestjs/swagger';
 import { InstrumentsService } from './instruments.service';
@@ -36,8 +36,17 @@ export class InstrumentsController {
   @Get('summary')
   @ApiOperation({ summary: 'Obtener resumen del inventario' })
   @ApiResponse({ status: 200, description: 'Resumen con totales y stock bajo' })
-  getInventorySummary() {
-    return this.instrumentsService.getInventorySummary();
+  @ApiQuery({
+    name: 'lowStockThreshold',
+    type: Number,
+    required: false,
+    description: 'Umbral de bajo stock (por defecto 3)',
+  })
+  getInventorySummary(
+    @Query('lowStockThreshold', new DefaultValuePipe(3), ParseIntPipe)
+    lowStockThreshold: number,
+  ) {
+    return this.instrumentsService.getInventorySummary(lowStockThreshold);
   }
 
   @Get('type/:tipo')
