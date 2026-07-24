@@ -1,11 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Between,
+  FindOptionsWhere,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Repository,
+} from 'typeorm';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventLogEntity } from '../../database/entities/event-log.entity';
 import { EventsMapper } from './events.mapper';
 import { EventAction, EVENT_ACTIONS } from './event-action.enum';
 import { AppLogger } from '../../logger/app-logger.service';
+import { FindEventsQueryDto } from './dto/find-events-query.dto';
 import {
   EventLogResponse,
   EventStats,
@@ -47,16 +54,47 @@ export class EventsService {
     }
   }
 
-  async findAll(): Promise<EventLogResponse[]> {
-    return this.eventLogRepository.find({ order: { recordedAt: 'ASC' } });
+  async findAll(filters?: FindEventsQueryDto): Promise<EventLogResponse[]> {
+    const where = this.buildWhereFromFilters(filters);
+    const events = await this.eventLogRepository.find(
+      where
+        ? { where, order: { recordedAt: 'ASC' } }
+        : { order: { recordedAt: 'ASC' } },
+    );
+    return events.map((event) => this.toResponse(event));
+  }
+
+  private buildWhereFromFilters(
+    filters?: FindEventsQueryDto,
+  ): FindOptionsWhere<EventLogEntity> | undefined {
+    if (!filters || (!filters.action && !filters.from && !filters.to)) {
+      return undefined;
+    }
+
+    const where: FindOptionsWhere<EventLogEntity> = {};
+
+    if (filters.action) {
+      where.action = filters.action;
+    }
+    if (filters.from && filters.to) {
+      where.recordedAt = Between(filters.from, filters.to);
+    } else if (filters.from) {
+      where.recordedAt = MoreThanOrEqual(filters.from);
+    } else if (filters.to) {
+      where.recordedAt = LessThanOrEqual(filters.to);
+    }
+
+    return where;
   }
 
   async findBySource(source: string): Promise<EventLogResponse[]> {
-    return this.eventLogRepository.findBy({ source });
+    const events = await this.eventLogRepository.findBy({ source });
+    return events.map((event) => this.toResponse(event));
   }
 
   async findByEntity(entity: string): Promise<EventLogResponse[]> {
-    return this.eventLogRepository.findBy({ entity });
+    const events = await this.eventLogRepository.findBy({ entity });
+    return events.map((event) => this.toResponse(event));
   }
 
   async getStats(): Promise<EventStats> {
@@ -97,5 +135,21 @@ export class EventsService {
       counts[key] = (counts[key] ?? 0) + 1;
       return counts;
     }, {});
+  }
+
+  private toResponse(event: EventLogEntity): EventLogResponse {
+    return { ...event, payload: this.parsePayload(event.payload) };
+  }
+
+  private parsePayload(rawPayload: string): unknown {
+    try {
+      return JSON.parse(rawPayload);
+    } catch {
+      this.logger.warn(
+        `No se pudo parsear el payload almacenado: ${rawPayload}`,
+        'EventsService',
+      );
+      return null;
+    }
   }
 }

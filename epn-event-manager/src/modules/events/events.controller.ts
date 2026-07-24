@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
+import { FindEventsQueryDto } from './dto/find-events-query.dto';
 
 @Controller('events')
 export class EventsController {
@@ -21,8 +22,8 @@ export class EventsController {
   }
 
   @Get()
-  findAll() {
-    return this.eventsService.findAll();
+  findAll(@Query() filters: FindEventsQueryDto) {
+    return this.eventsService.findAll(filters);
   }
 
   @Get('recent')
