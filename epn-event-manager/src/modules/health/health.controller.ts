@@ -1,12 +1,22 @@
 import { Controller, Get } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { EventLogEntity } from '../../database/entities/event-log.entity';
 
 @Controller('health')
 export class HealthController {
+  constructor(
+    @InjectRepository(EventLogEntity)
+    private readonly eventLogRepository: Repository<EventLogEntity>,
+  ) {}
+
   @Get()
-  check() {
+  async check() {
     try {
-      // Verificación real: si el proceso llegó aquí, NestJS y la BD están activos
-      // (TypeORM lanza excepción en bootstrap si la BD no es accesible)
+      // Ping real a la BD en cada llamada (no solo asumir por el bootstrap):
+      // si la conexión se cae después de que el servidor ya inició, esto lo detecta.
+      await this.eventLogRepository.query('SELECT 1');
+
       return {
         status: 'ok',
         timestamp: new Date().toISOString(),
