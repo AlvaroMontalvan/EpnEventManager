@@ -1,3 +1,11 @@
+// DEUDA TÉCNICA DOCUMENTADA (ticket C3): este archivo es una copia
+// intencionalmente idéntica a epn-instruments-crud/src/logger/app-logger.service.ts.
+// No hay una única fuente de verdad entre ambos repositorios: cualquier mejora
+// futura al logger debe aplicarse manualmente en los dos lugares. Próximo paso
+// recomendado: extraer esto a un paquete npm privado compartido (o a una
+// carpeta /shared si se decide monorepo) para que ambos proyectos lo consuman
+// desde un único origen.
+
 import { Injectable, LoggerService } from '@nestjs/common';
 
 enum LogLevel {
